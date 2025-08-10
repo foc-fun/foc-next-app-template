@@ -106,7 +106,6 @@ export default function FocEngineDemo() {
   const handleGaslessTransaction = async () => {
     if (!account || !paymaster) {
       addNotification({
-        id: Date.now().toString(),
         type: "warning",
         title: "Not Connected",
         message: "Please connect your wallet first",
@@ -115,39 +114,71 @@ export default function FocEngineDemo() {
       return;
     }
 
+    // Show info about demo limitations
+    addNotification({
+      type: "info", 
+      title: "Demo Mode",
+      message: "This is a demo - FOC Engine paymaster API endpoints may not be available",
+      duration: 4000
+    });
+
     try {
       // Example: Build a gasless transaction
       const calls = [
         {
-          contractAddress: "0x...", // Replace with actual contract
-          entrypoint: "transfer",
-          calldata: ["0x...", "1000"]
+          contractAddress: "0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7", // ETH contract
+          entrypoint: "transfer", 
+          calldata: [accountInfo?.address || "0x0", "1000000000000000"] // 0.001 ETH
         }
       ];
+
+      addNotification({
+        type: "info",
+        title: "Building Transaction",
+        message: "Attempting to build gasless transaction...",
+        duration: 2000
+      });
 
       const gaslessTx = await buildGaslessTx({ calls });
       
       // Execute transaction (gasless transactions are handled by paymaster internally)
       const result = await sendGaslessTx(gaslessTx);
       
-      setTxHash(result.transaction_hash);
+      setTxHash(result.transaction_hash || result);
       
       addNotification({
         type: "success",
         title: "Transaction Sent",
-        message: `Gasless tx sent: ${result.transaction_hash}`,
+        message: `Gasless tx sent: ${result.transaction_hash || result}`,
         duration: 5000
       });
 
     } catch (error) {
       console.error("Transaction failed:", error);
-      addNotification({
-        id: Date.now().toString(),
-        type: "error",
-        title: "Transaction Failed",
-        message: "Failed to send gasless transaction",
-        duration: 5000
-      });
+      
+      // Check if it's a network/API error
+      if (error instanceof TypeError && error.message.includes("fetch")) {
+        addNotification({
+          type: "error",
+          title: "API Connection Failed",
+          message: "FOC Engine paymaster API is not accessible. This is expected in demo mode.",
+          duration: 6000
+        });
+      } else if (error instanceof Error && error.message.includes("Failed to build")) {
+        addNotification({
+          type: "error", 
+          title: "Paymaster Service Unavailable",
+          message: "The paymaster service is not available. Check if the FOC Engine API is running.",
+          duration: 6000
+        });
+      } else {
+        addNotification({
+          type: "error",
+          title: "Transaction Failed",
+          message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          duration: 5000
+        });
+      }
     }
   };
 
@@ -216,8 +247,9 @@ export default function FocEngineDemo() {
               </button>
               <button
                 onClick={handleGaslessTransaction}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
                 disabled={!isFocConnected}
+                title={!isFocConnected ? "Connect FOC Engine first" : "Attempt to send gasless transaction (demo mode)"}
               >
                 Send Gasless Tx
               </button>
@@ -231,6 +263,9 @@ export default function FocEngineDemo() {
           <div className="text-sm space-y-1">
             <div>FOC Network: {network}</div>
             <div>Chain ID: {chainId}</div>
+            <div className="text-xs text-gray-400 mt-2">
+              💡 Gasless transactions require FOC Engine paymaster API access
+            </div>
           </div>
         </div>
 
