@@ -9,7 +9,6 @@ import {
 export default function FocEngineDemo() {
   const [txHash, setTxHash] = useState<string>("");
   const [notifications, setNotifications] = useState<any[]>([]);
-  const [exitingNotifications, setExitingNotifications] = useState<Set<string>>(new Set());
   
   // FOC Engine hooks
   const { 
@@ -39,7 +38,11 @@ export default function FocEngineDemo() {
   // Simple notification helper with animations - adds to beginning of array (most recent first)
   const addNotification = (notification: any) => {
     const newNotification = { ...notification, id: Date.now().toString(), isNew: true };
-    setNotifications(prev => [newNotification, ...prev]);
+    setNotifications(prev => {
+      const updated = [newNotification, ...prev];
+      // Only keep the most recent 50 notifications
+      return updated.slice(0, 50);
+    });
     
     // Remove the "new" flag after animation completes
     setTimeout(() => {
@@ -47,21 +50,6 @@ export default function FocEngineDemo() {
         n.id === newNotification.id ? { ...n, isNew: false } : n
       ));
     }, 100);
-    
-    // Start exit animation before removal
-    setTimeout(() => {
-      setExitingNotifications(prev => new Set(prev).add(newNotification.id));
-      
-      // Actually remove after exit animation
-      setTimeout(() => {
-        setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
-        setExitingNotifications(prev => {
-          const newSet = new Set(prev);
-          newSet.delete(newNotification.id);
-          return newSet;
-        });
-      }, 300); // Exit animation duration
-    }, notification.duration || 3000);
   };
 
   const handleConnectWallet = async () => {
@@ -114,14 +102,6 @@ export default function FocEngineDemo() {
       return;
     }
 
-    // Show info about demo limitations
-    addNotification({
-      type: "info", 
-      title: "Demo Mode",
-      message: "This is a demo - FOC Engine paymaster API endpoints may not be available",
-      duration: 4000
-    });
-
     try {
       // Example: Build a gasless transaction
       const calls = [
@@ -131,13 +111,6 @@ export default function FocEngineDemo() {
           calldata: [accountInfo?.address || "0x0", "1000000000000000"] // 0.001 ETH
         }
       ];
-
-      addNotification({
-        type: "info",
-        title: "Building Transaction",
-        message: "Attempting to build gasless transaction...",
-        duration: 2000
-      });
 
       const gaslessTx = await buildGaslessTx({ calls });
       
@@ -168,8 +141,8 @@ export default function FocEngineDemo() {
         addNotification({
           type: "error", 
           title: "Paymaster Service Unavailable",
-          message: "The paymaster service is not available. Check if the FOC Engine API is running.",
-          duration: 6000
+          message: "The paymaster service is not available. Check if FOC Engine API is running:\ncurl -X GET https://sepolia-api.foc.fun/health\nor locally: curl -X GET http://localhost:8080/health",
+          duration: 8000
         });
       } else {
         addNotification({
@@ -285,7 +258,6 @@ export default function FocEngineDemo() {
             <h3 className="font-semibold mb-2">Notifications</h3>
             <div className="flex flex-col gap-2">
               {notifications.map((notif: any) => {
-                const isExiting = exitingNotifications.has(notif.id);
                 const isNew = notif.isNew;
                 
                 return (
@@ -294,9 +266,7 @@ export default function FocEngineDemo() {
                     className={`p-3 rounded-lg text-sm transition-all duration-300 transform ${
                       isNew 
                         ? "opacity-0 -translate-y-4 scale-95" 
-                        : isExiting 
-                          ? "opacity-0 translate-x-full scale-95" 
-                          : "opacity-100 translate-y-0 translate-x-0 scale-100"
+                        : "opacity-100 translate-y-0 translate-x-0 scale-100"
                     } ${
                       notif.type === "success" ? "bg-green-500/10 border border-green-500/20" :
                       notif.type === "error" ? "bg-red-500/10 border border-red-500/20" :
@@ -308,7 +278,7 @@ export default function FocEngineDemo() {
                     }}
                   >
                     <div className="font-semibold">{notif.title}</div>
-                    <div className="text-xs opacity-80">{notif.message}</div>
+                    <div className="text-xs opacity-80 whitespace-pre-line font-mono">{notif.message}</div>
                   </div>
                 );
               })}
