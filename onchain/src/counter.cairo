@@ -25,6 +25,12 @@ pub trait ICounterGame<TContractState> {
     // Upgrade actions
     fn buy_upgrade(ref self: TContractState, upgrade_id: u32) -> bool;
     
+    // Admin functions
+    fn set_upgrade_config(ref self: TContractState, upgrade_id: u32, cost: u32, increment_value: u32);
+    fn add_new_upgrade(ref self: TContractState, upgrade_id: u32, cost: u32, increment_value: u32);
+    fn remove_upgrade(ref self: TContractState, upgrade_id: u32);
+    fn transfer_ownership(ref self: TContractState, new_owner: ContractAddress);
+    
     // View functions
     fn get_player_state(self: @TContractState, user: ContractAddress) -> PlayerState;
     fn get_current_count(self: @TContractState, user: ContractAddress) -> u32;
@@ -34,6 +40,7 @@ pub trait ICounterGame<TContractState> {
     fn has_purchased_upgrade(self: @TContractState, user: ContractAddress, upgrade_id: u32) -> bool;
     fn get_user_purchases(self: @TContractState, user: ContractAddress) -> Array<u32>;
     fn can_afford_upgrade(self: @TContractState, user: ContractAddress, upgrade_id: u32) -> bool;
+    fn get_owner(self: @TContractState) -> ContractAddress;
 }
 
 #[starknet::contract]
@@ -47,9 +54,11 @@ pub mod CounterGame {
 
     #[storage]
     struct Storage {
+        owner: ContractAddress,
         player_states: Map<ContractAddress, PlayerState>,
         user_purchases: Map<(ContractAddress, u32), bool>,
         upgrade_configs: Map<u32, UpgradeConfig>,
+        upgrade_count: u32,
         initialized: bool,
     }
 
@@ -60,6 +69,8 @@ pub mod CounterGame {
         CounterDecremented: CounterDecremented,
         UpgradePurchased: UpgradePurchased,
         PlayerReset: PlayerReset,
+        UpgradeConfigChanged: UpgradeConfigChanged,
+        OwnershipTransferred: OwnershipTransferred,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -88,8 +99,22 @@ pub mod CounterGame {
         pub user: ContractAddress,
     }
 
+    #[derive(Drop, starknet::Event)]
+    pub struct UpgradeConfigChanged {
+        pub upgrade_id: u32,
+        pub cost: u32,
+        pub increment_value: u32,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct OwnershipTransferred {
+        pub previous_owner: ContractAddress,
+        pub new_owner: ContractAddress,
+    }
+
     #[constructor]
-    fn constructor(ref self: ContractState) {
+    fn constructor(ref self: ContractState, owner: ContractAddress) {
+        self.owner.write(owner);
         self._initialize_upgrades();
     }
 
@@ -210,9 +235,10 @@ pub mod CounterGame {
         fn get_all_upgrades(self: @ContractState) -> Array<UpgradeConfig> {
             let mut upgrades = ArrayTrait::new();
             
-            // Get all 4 upgrades
+            // Get all upgrades up to upgrade_count
+            let max_upgrades = self.upgrade_count.read();
             let mut i = 1_u32;
-            while i <= 4 {
+            while i <= max_upgrades {
                 let config = self.upgrade_configs.entry(i).read();
                 if config.id != 0 {
                     upgrades.append(config);
@@ -230,9 +256,10 @@ pub mod CounterGame {
         fn get_user_purchases(self: @ContractState, user: ContractAddress) -> Array<u32> {
             let mut result = ArrayTrait::new();
             
-            // Check all possible upgrades (1-4)
+            // Check all possible upgrades up to upgrade_count
+            let max_upgrades = self.upgrade_count.read();
             let mut i = 1_u32;
-            while i <= 4 {
+            while i <= max_upgrades {
                 if self.user_purchases.entry((user, i)).read() {
                     result.append(i);
                 }
@@ -255,6 +282,87 @@ pub mod CounterGame {
             }
             
             state.points >= upgrade_config.cost
+        }
+
+        fn get_owner(self: @ContractState) -> ContractAddress {
+            self.owner.read()
+        }
+
+        // Admin functions
+        fn set_upgrade_config(ref self: ContractState, upgrade_id: u32, cost: u32, increment_value: u32) {
+            self._assert_only_owner();
+            
+            let existing_config = self.upgrade_configs.entry(upgrade_id).read();
+            assert(existing_config.id != 0, 'Upgrade does not exist');
+            
+            let new_config = UpgradeConfig {
+                id: upgrade_id,
+                cost: cost,
+                increment_value: increment_value,
+            };
+            
+            self.upgrade_configs.entry(upgrade_id).write(new_config);
+            
+            self.emit(UpgradeConfigChanged {
+                upgrade_id,
+                cost,
+                increment_value,
+            });
+        }
+
+        fn add_new_upgrade(ref self: ContractState, upgrade_id: u32, cost: u32, increment_value: u32) {
+            self._assert_only_owner();
+            
+            let existing_config = self.upgrade_configs.entry(upgrade_id).read();
+            assert(existing_config.id == 0, 'Upgrade already exists');
+            
+            let new_config = UpgradeConfig {
+                id: upgrade_id,
+                cost: cost,
+                increment_value: increment_value,
+            };
+            
+            self.upgrade_configs.entry(upgrade_id).write(new_config);
+            
+            // Update upgrade count if this is a new sequential upgrade
+            let current_count = self.upgrade_count.read();
+            if upgrade_id > current_count {
+                self.upgrade_count.write(upgrade_id);
+            }
+            
+            self.emit(UpgradeConfigChanged {
+                upgrade_id,
+                cost,
+                increment_value,
+            });
+        }
+
+        fn remove_upgrade(ref self: ContractState, upgrade_id: u32) {
+            self._assert_only_owner();
+            
+            let existing_config = self.upgrade_configs.entry(upgrade_id).read();
+            assert(existing_config.id != 0, 'Upgrade does not exist');
+            
+            // Set to empty config (id = 0 marks as non-existent)
+            self.upgrade_configs.entry(upgrade_id).write(UpgradeConfig { id: 0, cost: 0, increment_value: 0 });
+            
+            self.emit(UpgradeConfigChanged {
+                upgrade_id,
+                cost: 0,
+                increment_value: 0,
+            });
+        }
+
+        fn transfer_ownership(ref self: ContractState, new_owner: ContractAddress) {
+            self._assert_only_owner();
+            
+            let previous_owner = self.owner.read();
+            self.owner.write(new_owner);
+            
+            self.emit(OwnershipTransferred {
+                previous_owner,
+                new_owner,
+            });
         }
     }
 
@@ -292,6 +400,13 @@ pub mod CounterGame {
             self.upgrade_configs.entry(4).write(UpgradeConfig { id: 4, cost: 100, increment_value: 5 });
             
             self.initialized.write(true);
+            self.upgrade_count.write(4);
+        }
+
+        fn _assert_only_owner(ref self: ContractState) {
+            let caller = get_caller_address();
+            let owner = self.owner.read();
+            assert(caller == owner, 'Caller is not the owner');
         }
     }
 }

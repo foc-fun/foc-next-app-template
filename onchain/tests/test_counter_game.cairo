@@ -8,7 +8,10 @@ use onchain::counter::{
 
 fn deploy_contract() -> ICounterGameDispatcher {
     let contract = declare("CounterGame").unwrap().contract_class();
-    let (contract_address, _) = contract.deploy(@ArrayTrait::new()).unwrap();
+    let owner: ContractAddress = 'default_owner'.try_into().unwrap();
+    let mut constructor_args = ArrayTrait::new();
+    constructor_args.append(owner.into());
+    let (contract_address, _) = contract.deploy(@constructor_args).unwrap();
     ICounterGameDispatcher { contract_address }
 }
 
