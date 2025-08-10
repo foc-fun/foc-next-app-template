@@ -1,0 +1,23 @@
+name: my-app-name
+version: 0.1.0
+
+engine_url: http://localhost:8080
+
+starknet:
+  network: devnet
+  node_url: http://localhost:5050
+
+contracts:
+  - name: my-app-name
+    version: 0.1.0
+    class_name: CounterGame
+    constructor:
+      - ${ACCOUNT}
+    init_commands:
+      - setup-upgrades.sh
+
+modules:
+  - registry
+  - accounts
+  - paymaster
+  - events
