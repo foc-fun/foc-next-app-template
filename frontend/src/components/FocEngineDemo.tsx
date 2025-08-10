@@ -9,6 +9,7 @@ import {
 export default function FocEngineDemo() {
   const [txHash, setTxHash] = useState<string>("");
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [exitingNotifications, setExitingNotifications] = useState<Set<string>>(new Set());
   
   // FOC Engine hooks
   const { 
@@ -35,11 +36,31 @@ export default function FocEngineDemo() {
     getAllBalances
   } = useStarknet();
 
-  // Simple notification helper
+  // Simple notification helper with animations - adds to beginning of array (most recent first)
   const addNotification = (notification: any) => {
-    setNotifications(prev => [...prev, { ...notification, id: Date.now().toString() }]);
+    const newNotification = { ...notification, id: Date.now().toString(), isNew: true };
+    setNotifications(prev => [newNotification, ...prev]);
+    
+    // Remove the "new" flag after animation completes
     setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== notification.id));
+      setNotifications(prev => prev.map(n => 
+        n.id === newNotification.id ? { ...n, isNew: false } : n
+      ));
+    }, 100);
+    
+    // Start exit animation before removal
+    setTimeout(() => {
+      setExitingNotifications(prev => new Set(prev).add(newNotification.id));
+      
+      // Actually remove after exit animation
+      setTimeout(() => {
+        setNotifications(prev => prev.filter(n => n.id !== newNotification.id));
+        setExitingNotifications(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(newNotification.id);
+          return newSet;
+        });
+      }, 300); // Exit animation duration
     }, notification.duration || 3000);
   };
 
@@ -223,24 +244,40 @@ export default function FocEngineDemo() {
           </div>
         )}
 
-        {/* Notifications */}
+        {/* Notifications - newest first */}
         {notifications.length > 0 && (
-          <div className="mt-4 space-y-2">
-            <h3 className="font-semibold">Notifications</h3>
-            {notifications.map((notif: any) => (
-              <div
-                key={notif.id}
-                className={`p-3 rounded-lg text-sm ${
-                  notif.type === "success" ? "bg-green-500/10 border border-green-500/20" :
-                  notif.type === "error" ? "bg-red-500/10 border border-red-500/20" :
-                  notif.type === "warning" ? "bg-yellow-500/10 border border-yellow-500/20" :
-                  "bg-blue-500/10 border border-blue-500/20"
-                }`}
-              >
-                <div className="font-semibold">{notif.title}</div>
-                <div className="text-xs opacity-80">{notif.message}</div>
-              </div>
-            ))}
+          <div className="mt-4">
+            <h3 className="font-semibold mb-2">Notifications</h3>
+            <div className="flex flex-col gap-2">
+              {notifications.map((notif: any) => {
+                const isExiting = exitingNotifications.has(notif.id);
+                const isNew = notif.isNew;
+                
+                return (
+                  <div
+                    key={notif.id}
+                    className={`p-3 rounded-lg text-sm transition-all duration-300 transform ${
+                      isNew 
+                        ? "opacity-0 -translate-y-4 scale-95" 
+                        : isExiting 
+                          ? "opacity-0 translate-x-full scale-95" 
+                          : "opacity-100 translate-y-0 translate-x-0 scale-100"
+                    } ${
+                      notif.type === "success" ? "bg-green-500/10 border border-green-500/20" :
+                      notif.type === "error" ? "bg-red-500/10 border border-red-500/20" :
+                      notif.type === "warning" ? "bg-yellow-500/10 border border-yellow-500/20" :
+                      "bg-blue-500/10 border border-blue-500/20"
+                    }`}
+                    style={{
+                      animation: isNew ? "slideInFromTop 0.3s ease-out forwards" : undefined
+                    }}
+                  >
+                    <div className="font-semibold">{notif.title}</div>
+                    <div className="text-xs opacity-80">{notif.message}</div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
