@@ -1,0 +1,46 @@
+{
+  "upgrades": [
+    {
+      "id": 1,
+      "name": "Double Power",
+      "description": "Increase increment/decrement to ±2",
+      "cost": 10,
+      "increment_value": 2
+    },
+    {
+      "id": 2,
+      "name": "Triple Power",
+      "description": "Increase increment/decrement to ±3",
+      "cost": 25,
+      "increment_value": 3
+    },
+    {
+      "id": 3,
+      "name": "Quad Power",
+      "description": "Increase increment/decrement to ±4",
+      "cost": 50,
+      "increment_value": 4
+    },
+    {
+      "id": 4,
+      "name": "Mega Power",
+      "description": "Increase increment/decrement to ±5",
+      "cost": 100,
+      "increment_value": 5
+    },
+    {
+      "id": 5,
+      "name": "Ultra Power",
+      "description": "Increase increment/decrement to ±10",
+      "cost": 250,
+      "increment_value": 10
+    },
+    {
+      "id": 6,
+      "name": "Super Power",
+      "description": "Increase increment/decrement to ±20",
+      "cost": 500,
+      "increment_value": 20
+    }
+  ]
+}
