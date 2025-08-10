@@ -46,6 +46,16 @@ export default function Header() {
           >
             Info
           </Link>
+          <Link 
+            href="/foc-demo"
+            className={`text-sm font-medium transition-colors hover:text-primary ${
+              isActive('/foc-demo') 
+                ? 'text-foreground' 
+                : 'text-muted-foreground'
+            }`}
+          >
+            FOC Demo
+          </Link>
           <button
             onClick={handleLogin}
             className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background bg-primary text-primary-foreground hover:bg-primary/90 h-9 px-4 py-2"
